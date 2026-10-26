@@ -343,7 +343,8 @@ const defEvent = {
   office: 'OFFICE OF THE HUMAN RESOURCE MANAGEMENT AND DEVELOPMENT',
   formTitle: 'BEHAVIORAL EVENT INTERVIEW',
   directions: "You are to rate the candidate on certain characteristics and traits which can be observed when you talk with the applicant face to face. Consider whether the applicant's personal characteristics as manifested during the interview, will be an asset or liability to the position being considered. Write your rating/score of the candidate's characteristics solely on evidence observed during the interview using the proper scale on the space provided. Each part of the scale has an equivalent point score.",
-  position: '', date: '', adminPin: '1234', sigName: '', sigTitle: ''
+  position: '', date: '', adminPin: '1234', sigName: '', sigTitle: '',
+  tabCategory: '', tabFor: '', tabDates: '', beiWeight: 20
 };
 const ev = () => ({ ...defEvent, ...D.event });
 const byOrder = (a, b) => (a.order || 0) - (b.order || 0);
@@ -483,7 +484,9 @@ function evTab() {
     <label class="fld"><span>Directions printed on the rating sheet</span><textarea rows="5" data-ev="directions">${esc(e.directions)}</textarea></label>
     <div class="grid" style="margin-top:12px">
     ${f('Position being filled (default)', 'position')}${f('Date of interview', 'date', 'date')}
-    ${f('Signatory name (summary report)', 'sigName')}${f('Signatory title', 'sigTitle')}</div></div>
+    ${f('Signatory name (summary report)', 'sigName')}${f('Signatory title', 'sigTitle')}
+    ${f('Tabulation CSV: category line (e.g. (For Non-Teaching))', 'tabCategory')}${f('Tabulation CSV: position line (e.g. FOR ONE (1) … (CODE))', 'tabFor')}
+    ${f('Tabulation CSV: interview dates (e.g. October 6-8, 2026)', 'tabDates')}${f('BEI weight in the overall rating (%)', 'beiWeight', 'number')}</div></div>
   <div class="card"><h3>Security &amp; data</h3><div class="grid">${f('Administrator password', 'adminPin')}</div>
     <p class="hint">Passwords are checked in the browser; they keep casual users out but are not strong security.</p>
     <button class="btn sec" data-act="clearScores">Clear all scores</button></div>`;
@@ -548,7 +551,7 @@ function resTab() {
   return secHead('Tabulation', 'Results', `Ranking uses submitted ratings only. Each judge's total is out of ${maxTotal()} points; the average is the mean of all judges' totals.`) +
   `<div class="card"><div class="row" style="margin-bottom:12px">
     <button class="btn gold" data-act="pdfSummary">⬇ Download summary (PDF)</button>
-    <button class="btn gold" data-act="csvResults">⬇ Results (CSV)</button>
+    <button class="btn gold" data-act="csvResults">⬇ Tabulation sheet (CSV)</button>
     <button class="btn gold" data-act="csvDetail">⬇ Scores per judge (CSV)</button></div>
   <div class="scroll"><table class="t"><tr><th>Rank</th><th>Applicant</th>${jl.map(j => `<th>${esc(j.name)}</th>`).join('')}<th>Average</th><th>Judges in</th></tr>
   ${R.map(r => `<tr><td><b>${r.rank ?? '—'}</b></td><td>${esc(r.c.name)}<div class="hint">${esc(r.c.position || ev().position)}</div></td>
@@ -575,7 +578,7 @@ function printTab() {
       ${items.length < MAX_IMG ? `<label class="imgtile add"><div class="imgbox"><span>＋</span>Add image${items.length ? 's' : ''}</div><input type="file" accept="image/*" multiple data-hdr="add" hidden></label>` : ''}</div>
     <p class="hint" style="margin-bottom:0">${items.length} of ${MAX_IMG} used. You can pick several files at once.</p></div>
   <div class="card"><h3>Data downloads</h3><div class="row">
-    <button class="btn" data-act="csvResults">⬇ Results (CSV)</button>
+    <button class="btn" data-act="csvResults">⬇ Tabulation sheet (CSV)</button>
     <button class="btn" data-act="csvDetail">⬇ Scores per judge (CSV)</button>
     <button class="btn sec" data-act="json">⬇ Full backup (JSON)</button></div>
     <p class="hint">CSV files open in Excel or Google Sheets.</p></div>
@@ -858,10 +861,24 @@ document.addEventListener('click', async e => {
       download('BEI_applicants_template.csv', csv([['Name', 'Position Applying For', 'Unit/Campus'], ['Juan Dela Cruz', 'Administrative Aide IV', 'Main Campus'], ['Maria Santos', 'Instructor I', 'Pili Campus']]), 'text/csv;charset=utf-8'); break;
     case 'hdrDel': if (d.id === 'legacy') backend.save('event', 'main', { headerImage: '' }); else backend.remove('images', d.id); break;
     case 'csvResults': {
-      const R = results(), jl = judges();
-      const rows = [['Rank', 'Applicant', 'Position', 'Unit/Campus', ...jl.map(j => j.name + ' (out of ' + maxTotal() + ')'), 'Average', 'Judges submitted']];
-      R.forEach(r => rows.push([r.rank ?? '', r.c.name, r.c.position || ev().position, r.c.office || '', ...r.per.map(p => p.submitted ? p.pts : ''), r.avg != null ? Math.round(r.avg * 100) / 100 : '', r.count + '/' + jl.length]));
-      download('BEI_results_' + today() + '.csv', csv(rows), 'text/csv;charset=utf-8'); break;
+      const e = ev(), jl = judges(), max = maxTotal(), wt = +e.beiWeight || 0, LT = i => String.fromCharCode(65 + i % 26);
+      const rows = [];
+      if (e.tabCategory) rows.push([e.tabCategory]);
+      rows.push([], ['TABULATION OF BEHAVIORAL EVENT INTERVIEW OF APPLICANTS']);
+      const forLine = e.tabFor || e.position; if (forLine) rows.push([forLine]);
+      const dt = e.tabDates || dateFmt(e.date); if (dt) rows.push([], [dt]);
+      rows.push([]);
+      rows.push(['NO.', 'NAME', "RATERS' RATING", ...jl.slice(1).map(() => ''), 'TOTAL', 'MEAN', '% WEIGHT', 'EARNED POINTS']);
+      rows.push(['', '', ...jl.map((j, i) => LT(i)), '', '', 'total/total point score(' + max + ')*100', wt + '%']);
+      cands().forEach((c, i) => {
+        const pts = jl.map(j => { const k = calc(j.id, c.id); return k.submitted && k.complete ? k.pts : null; });
+        const got = pts.filter(v => v != null), total = got.reduce((a, b) => a + b, 0);
+        const mean = got.length ? total / got.length : 0, pct = got.length ? mean / max * 100 : null;
+        rows.push([i + 1, c.name, ...pts.map(v => v ?? ''), total, mean.toFixed(2), pct != null ? pct.toFixed(2) : '', (pct != null ? pct * wt / 100 : 0).toFixed(2)]);
+      });
+      rows.push([], ['RATERS']);
+      jl.forEach((j, i) => rows.push([LT(i), j.name + (j.title ? ', ' + j.title : '')]));
+      download('BEI_tabulation_' + today() + '.csv', csv(rows), 'text/csv;charset=utf-8'); break;
     }
     case 'csvDetail': {
       const cr = crit();
