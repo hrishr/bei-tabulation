@@ -459,11 +459,11 @@ function login() {
   ${S.err ? `<div class="err">${esc(S.err)}</div>` : ''}
   <p><button class="btn" data-act="login" style="width:100%;justify-content:center">Sign in</button></p>
   ${isAdmin ? '<p class="hint">Default administrator password is 1234 until you change it in Event Setup.</p>' : '<p class="hint">Default judge logins: Judge1 / 1111, Judge2 / 2222, Judge3 / 3333 and so on.</p>'}
-  <details><summary>Connection (Firebase)</summary>
+  ${FIREBASE_CONFIG ? '' : `<details><summary>Connection (Firebase)</summary>
     <p class="hint">Paste the Firebase web config from your project settings. It is saved in this browser only. For GitHub Pages, put it in <code>FIREBASE_CONFIG</code> at the top of the script so every device connects automatically.</p>
     <textarea id="fbcfg" rows="6" placeholder='apiKey: "...", authDomain: "...", projectId: "...", appId: "..."'></textarea>
     <div class="row" style="margin-top:8px"><button class="btn sec" data-act="fbsave">Save &amp; connect</button><button class="btn sec" data-act="fbclear">Use local mode</button></div>
-  </details></div>`;
+  </details>`}</div>`;
 }
 
 /* ------------------------------ admin ------------------------------ */
